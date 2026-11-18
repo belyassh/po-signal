@@ -1,0 +1,30 @@
+{
+  // PO Signal — Cloudflare Workers + Durable Objects (работает на бесплатном тарифе)
+  "name": "po-signal",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+
+  // интерфейс: index.html, analysis.js, иконки, манифест
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // один Durable Object держит соединение с Pocket Option и хранит историю в SQLite
+  "durable_objects": {
+    "bindings": [{ "name": "FEED", "class_name": "PoFeed" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PoFeed"] }],
+
+  // раз в минуту проверяем, что поток котировок жив (после деплоя/перезапуска)
+  "triggers": { "crons": ["* * * * *"] },
+
+  // обычные настройки; SSID и APP_PASSWORD задаются как СЕКРЕТЫ в панели Cloudflare
+  "vars": {
+    "ASSET": "SOL-USD_otc",
+    "PERIOD": "60",
+    "IDLE_MINUTES": "0",
+    "DEMO": "0"
+  },
+  // не затирать переменные, добавленные вручную в панели, при каждом деплое
+  "keep_vars": true,
+
+  "observability": { "enabled": true }
+}

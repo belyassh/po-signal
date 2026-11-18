@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161d2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PO Signal">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>PO Signal</title>
+<script src="/analysis.js"></script>
+<style>
+  :root{
+    --bg:#161d2b; --bg2:#1b2333; --panel:#212b3e; --panel2:#27334a; --line:#2f3b52;
+    --text:#d8e0ee; --muted:#8392ad; --blue:#5b8cf5; --blue2:#3e6fe0;
+    --green:#2ec27e; --red:#ef5b5b; --amber:#f0b54a;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+    --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.4 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust:100%}
+  button{font:inherit;color:inherit}
+  .hidden{display:none !important}
+  .muted{color:var(--muted)} .small{font-size:12.5px} .good{color:var(--green)} .bad{color:var(--red)}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- каркас ---------- */
+  #app{display:flex;flex-direction:column;min-height:100dvh;padding-bottom:calc(124px + var(--safe-b))}
+  header.top{position:sticky;top:0;z-index:5;background:rgba(22,29,43,.97);backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+    padding:calc(8px + var(--safe-t)) 12px 8px;display:flex;align-items:center;gap:10px}
+  .asset-btn{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:8px 10px;min-width:0;flex:1;max-width:260px;cursor:pointer;text-align:left}
+  .asset-btn .ico{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+    font-size:11px;font-weight:800;color:#fff;background:linear-gradient(135deg,#6d5cf6,#2ec2b5)}
+  .asset-btn .nm{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .asset-btn .caret{color:var(--muted);margin-left:auto;font-size:12px}
+  .pay{font:600 12px var(--mono);padding:2px 6px;border-radius:6px;background:rgba(46,194,126,.14);color:var(--green);flex-shrink:0}
+  .pay.mid{background:rgba(240,181,74,.14);color:var(--amber)} .pay.low{background:rgba(239,91,91,.14);color:var(--red)}
+  .pay.na{background:rgba(131,146,173,.14);color:var(--muted)}
+  .px{margin-left:auto;text-align:right;min-width:0}
+  .px .p{font:650 18px var(--mono);letter-spacing:.2px;white-space:nowrap}
+  .px .c{font:11.5px var(--mono);color:var(--muted);white-space:nowrap}
+  .icon-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+    display:grid;place-items:center;cursor:pointer;flex-shrink:0;font-size:18px}
+  .statusbar{display:flex;align-items:center;gap:7px;padding:6px 12px;font-size:12px;color:var(--muted);
+    border-bottom:1px solid var(--line);background:var(--bg2);white-space:nowrap;overflow:hidden}
+  .statusbar i{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+  .statusbar.live i{background:var(--green);box-shadow:0 0 0 3px rgba(46,194,126,.18)}
+  .statusbar.waiting i,.statusbar.connecting i,.statusbar.starting i{background:var(--amber)}
+  .statusbar.error i,.statusbar.no_ssid i{background:var(--red)}
+  .statusbar span{overflow:hidden;text-overflow:ellipsis}
+  .demo-banner{background:#4a3410;color:#ffd58a;padding:7px 12px;font-size:12px;border-bottom:1px solid #6b4b12}
+
+  main.layout{display:flex;flex-direction:column}
+  .chart-card{position:relative;height:44dvh;min-height:250px;background:linear-gradient(#1a2234,#141b28)}
+  #chart{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+  .tf{position:absolute;left:8px;top:8px;display:flex;gap:4px;z-index:2}
+  .chip{background:rgba(33,43,62,.92);border:1px solid var(--line);color:var(--muted);border-radius:8px;
+    padding:6px 9px;cursor:pointer;font:12px var(--mono)}
+  .chip.on{color:#fff;border-color:var(--blue);background:#2a3b62}
+
+  .side{display:flex;flex-direction:column;gap:10px;padding:10px 12px 16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .card h3{margin:0 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:650}
+  .btn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;font-size:14px}
+  .btn:active{transform:scale(.98)}
+  .btn.wide{width:100%}
+  .btn.primary{background:var(--blue2);border-color:var(--blue2);color:#fff;font-weight:650}
+  input,textarea{background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:10px;
+    padding:10px 11px;font:16px var(--mono);width:100%;min-width:0}
+  textarea{font-size:13px;resize:vertical;min-height:84px}
+  input:focus,textarea:focus{outline:none;border-color:var(--blue)}
+
+  /* ---------- нижняя панель действий ---------- */
+  .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(22,29,43,.97);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);
+    padding:10px 12px calc(10px + var(--safe-b))}
+  .exp{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:8px}
+  .exp button{background:var(--bg);border:1px solid var(--line);color:var(--muted);border-radius:9px;
+    padding:8px 0;cursor:pointer;font:13px var(--mono)}
+  .exp button.on{color:#fff;border-color:var(--blue);background:#2a3b62}
+  .analyze{width:100%;padding:15px;border:none;border-radius:14px;cursor:pointer;
+    background:linear-gradient(180deg,#5288f7,#3463d6);color:#fff;font-weight:800;font-size:17px;letter-spacing:2px;
+    box-shadow:0 6px 20px rgba(62,111,224,.35)}
+  .analyze:active{transform:scale(.985)}
+  .analyze:disabled{opacity:.6}
+
+  /* ---------- результат ---------- */
+  .verdict{display:flex;align-items:center;gap:12px}
+  .verdict .arrow{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:24px;font-weight:900;flex-shrink:0}
+  .verdict .big{font-size:24px;font-weight:850;letter-spacing:1px;line-height:1.1}
+  .verdict .sub{font-size:12px;color:var(--muted)}
+  .verdict .cd{margin-left:auto;text-align:right;font:600 13px var(--mono);white-space:nowrap}
+  .LONG .big{color:var(--green)} .LONG .arrow{background:rgba(46,194,126,.15);color:var(--green)}
+  .SHORT .big{color:var(--red)} .SHORT .arrow{background:rgba(239,91,91,.15);color:var(--red)}
+  .NEUTRAL .big{color:var(--muted)} .NEUTRAL .arrow{background:rgba(131,146,173,.15);color:var(--muted)}
+  .strength{height:6px;border-radius:3px;background:var(--bg);overflow:hidden;margin:10px 0 3px}
+  .strength div{height:100%;border-radius:3px;transition:width .3s}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+  .tile{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 9px}
+  .tile .t{font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between}
+  .tile .v{font:600 13px var(--mono);margin-top:2px}
+  .vote{position:relative;height:5px;background:var(--panel2);border-radius:3px;margin-top:6px}
+  .vote::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line)}
+  .vote div{position:absolute;top:0;bottom:0;border-radius:3px}
+  details{margin-top:8px} summary{cursor:pointer;color:var(--blue);font-size:13px}
+  details ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted)}
+  details li{margin:3px 0}
+  .placeholder{font-size:13px;color:var(--muted)}
+
+  .stat{display:flex;justify-content:space-between;font-size:14px;padding:3px 0}
+  .stat b{font-family:var(--mono);font-weight:600}
+  .sig-list{margin-top:6px;max-height:220px;overflow-y:auto}
+  .sig{display:grid;grid-template-columns:62px 16px 1fr 24px;gap:6px;font:12.5px var(--mono);padding:6px 0;border-top:1px solid var(--line);align-items:center}
+  .sig .r{text-align:right;font-weight:700}
+  .note{font-size:12px;color:var(--muted);margin-top:6px}
+  .verdict-text{margin-top:8px;padding:9px 10px;border-radius:9px;background:var(--bg);font-size:13px}
+  footer{font-size:11px;color:var(--muted);text-align:center;padding:4px 0 8px}
+
+  /* ---------- шторки ---------- */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .2s;z-index:19}
+  .backdrop.on{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg2);border-radius:18px 18px 0 0;
+    border-top:1px solid var(--line);transform:translateY(105%);transition:transform .25s ease;
+    display:flex;flex-direction:column;max-height:90dvh;padding-bottom:var(--safe-b)}
+  .sheet.on{transform:none}
+  .sheet.tall{height:90dvh}
+  .sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 2px}
+  .sheet .head{display:flex;align-items:center;justify-content:space-between;padding:6px 14px 8px}
+  .sheet .head b{font-size:17px}
+  .sheet .body{overflow-y:auto;padding:0 14px 14px;flex:1;min-height:0}
+  .cats{display:flex;gap:6px;overflow-x:auto;padding:10px 0 8px;scrollbar-width:none}
+  .cats::-webkit-scrollbar{display:none}
+  .cats .chip{white-space:nowrap;font-family:inherit;font-size:13px;padding:7px 11px}
+  .alist .row{display:flex;align-items:center;gap:10px;padding:11px 2px;border-top:1px solid var(--line);cursor:pointer}
+  .alist .row.cur{background:rgba(91,140,245,.08);border-radius:8px}
+  .alist .row.closed{opacity:.45}
+  .alist .star{background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;padding:0 2px;line-height:1}
+  .alist .star.on{color:var(--amber)}
+  .alist .an{flex:1;min-width:0}
+  .alist .an div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .alist .an .s{font:11.5px var(--mono);color:var(--muted)}
+  .alist .empty{padding:24px 0;text-align:center;color:var(--muted);font-size:14px}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:2px 0 6px}
+  .toggle input{width:auto}
+  .set-sec{border-top:1px solid var(--line);padding:12px 0}
+  .set-sec:first-child{border-top:none}
+  .set-sec h4{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:650;text-transform:uppercase;letter-spacing:.6px}
+  .row2{display:flex;gap:8px;align-items:center}
+
+  /* ---------- вход ---------- */
+  #login{position:fixed;inset:0;display:grid;place-items:center;padding:24px;z-index:30;background:var(--bg)}
+  #login .box{width:100%;max-width:360px;text-align:center}
+  #login img{width:72px;height:72px;border-radius:18px}
+  #login h1{font-size:22px;margin:12px 0 4px}
+  #login form{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+
+  #toast{position:fixed;left:50%;top:calc(12px + var(--safe-t));transform:translate(-50%,-200%);opacity:0;z-index:40;
+    background:#2a3550;border:1px solid var(--line);padding:10px 14px;border-radius:12px;font-size:14px;
+    max-width:92vw;transition:transform .25s,opacity .25s;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  #toast.on{transform:translate(-50%,0);opacity:1}
+  #toast.err{border-color:#7a3030;background:#3a2226}
+
+  /* ---------- планшет / компьютер ---------- */
+  @media (min-width: 900px){
+    #app{height:100dvh;padding-bottom:0}
+    main.layout{flex:1;min-height:0;display:grid;grid-template-columns:1fr 390px}
+    .chart-card{height:auto;min-height:0}
+    .side{overflow-y:auto;border-left:1px solid var(--line);background:var(--bg2);padding-bottom:170px}
+    .actionbar{left:auto;width:390px;border-left:1px solid var(--line)}
+    .sheet{left:50%;right:auto;width:520px;margin-left:-260px;bottom:auto;top:6dvh;border-radius:18px;border:1px solid var(--line);
+      transform:translateY(16px);opacity:0;pointer-events:none;transition:transform .2s,opacity .2s}
+    .sheet.on{opacity:1;transform:none;pointer-events:auto}
+    .sheet.tall{height:86dvh}
+    .sheet .grab{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="login" class="hidden">
+  <div class="box">
+    <img src="/icon-192.png" alt="">
+    <h1>PO Signal</h1>
+    <div class="muted small">Введи пароль приложения</div>
+    <form id="loginForm">
+      <input type="password" id="loginPw" autocomplete="current-password" placeholder="Пароль" required>
+      <button class="btn primary" type="submit">Войти</button>
+      <div class="bad small" id="loginErr"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header class="top">
+    <button class="asset-btn" id="assetBtn" aria-label="Выбрать пару">
+      <span class="ico" id="aIco">S</span>
+      <span class="nm" id="aName">—</span>
+      <span class="pay na" id="aPay">—</span>
+      <span class="caret">▾</span>
+    </button>
+    <div class="px"><div class="p" id="lastPrice">—</div><div class="c" id="lastChg">&nbsp;</div></div>
+    <button class="icon-btn" id="setBtn" aria-label="Настройки">⚙︎</button>
+  </header>
+  <div class="statusbar starting" id="statusbar"><i></i><span id="statusText">Запуск…</span></div>
+  <div class="demo-banner hidden" id="demoBanner">Режим симуляции: случайные данные, а не котировки Pocket Option.</div>
+
+  <main class="layout">
+    <section class="chart-card">
+      <div class="tf" id="tf">
+        <button class="chip" data-s="60">1м</button><button class="chip on" data-s="180">3м</button>
+        <button class="chip" data-s="300">5м</button><button class="chip" data-s="900">15м</button>
+        <button class="chip" data-s="1800">30м</button>
+      </div>
+      <canvas id="chart"></canvas>
+    </section>
+
+    <section class="side">
+      <div class="card" id="resultCard">
+        <div class="placeholder" id="resultPh">Выбери экспирацию внизу и нажми <b>«Анализ»</b>. Каждый сигнал потом сам проверится по цене.</div>
+        <div id="resultBody" class="hidden">
+          <div class="verdict NEUTRAL" id="verdict">
+            <div class="arrow" id="vArrow">—</div>
+            <div><div class="big" id="vText">—</div><div class="sub" id="vSub"></div></div>
+            <div class="cd" id="countdown"></div>
+          </div>
+          <div class="strength"><div id="strengthBar"></div></div>
+          <div class="small muted">Согласие индикаторов — это не вероятность выигрыша</div>
+          <div class="tiles" id="tiles"></div>
+          <details><summary>Почему так?</summary><ul id="whyList"></ul></details>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Мои сигналы по этой паре</h3>
+        <div class="stat"><span>Угадано</span><b id="sWin">0 из 0</b></div>
+        <div class="stat"><span>Процент попаданий</span><b id="sRate">—</b></div>
+        <div class="note" id="sNeed"></div>
+        <div class="sig-list" id="sigList"></div>
+        <div class="row2" style="justify-content:flex-end;margin-top:8px"><button class="btn small" id="clearBtn">Очистить</button></div>
+      </div>
+
+      <div class="card">
+        <h3>Бэктест на истории</h3>
+        <button class="btn wide" id="btBtn">Проверить алгоритм на накопленных котировках</button>
+        <div id="btOut"></div>
+      </div>
+      <footer>Учебный инструмент · сделки не открывает · не финансовый совет</footer>
+    </section>
+  </main>
+
+  <div class="actionbar">
+    <div class="exp" id="exp">
+      <button data-e="15">15с</button><button data-e="30">30с</button><button data-e="60" class="on">1м</button>
+      <button data-e="120">2м</button><button data-e="180">3м</button><button data-e="300">5м</button>
+    </div>
+    <button class="analyze" id="analyzeBtn">АНАЛИЗ</button>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+
+<div class="sheet tall" id="assetSheet" role="dialog" aria-label="Выбор пары">
+  <div class="grab"></div>
+  <div class="head"><b>Выбор пары</b><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
+  <div class="body">
+    <input type="search" id="aSearch" placeholder="Поиск: sol, eur, gold…" autocomplete="off" spellcheck="false">
+    <div class="cats" id="cats"></div>
+    <label class="toggle"><input type="checkbox" id="showClosed"> показать закрытые сейчас</label>
+    <div class="alist" id="alist"></div>
+    <div class="note" id="catNote"></div>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet" role="dialog" aria-label="Настройки">
+  <div class="grab"></div>
+  <div class="head"><b>Настройки</b><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
+  <div class="body">
+    <div class="set-sec">
+      <h4>Подключение</h4>
+      <div id="setSource" class="small"></div>
+      <div id="ssidBox" class="hidden" style="margin-top:10px">
+        <textarea id="ssidInput" placeholder='42["auth",{"session":"…","isDemo":1,"uid":…,"platform":1}]' spellcheck="false" autocomplete="off"></textarea>
+        <button class="btn primary wide" id="ssidBtn" style="margin-top:8px">Сохранить SSID и переподключиться</button>
+        <div class="note">SSID копируется на компьютере: pocketoption.com → F12 → Network → WS → сообщение <span class="mono">42["auth",…</span>. Лучше от демо-счёта.</div>
+      </div>
+      <div id="ssidNote" class="note hidden"></div>
+    </div>
+    <div class="set-sec">
+      <h4>Выплата для этой пары</h4>
+      <div class="row2"><input type="number" id="payIn" inputmode="decimal" min="1" max="200" placeholder="авто" style="width:110px"><span>%</span>
+        <span class="muted small" style="margin-left:auto">Безубыток: <b id="beSet" class="mono" style="color:var(--text)">—</b></span></div>
+      <div class="note">Пусто — берём выплату из Pocket Option. Безубыток — доля сделок, которую нужно угадывать, чтобы выйти в ноль.</div>
+    </div>
+    <div class="set-sec" id="logoutSec">
+      <button class="btn wide" id="logoutBtn">Выйти</button>
+    </div>
+    <div class="set-sec note" id="aboutSec">PO Signal · учебный инструмент. Только читает котировки, сделки не открывает.</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+  // ======================================================== состояние
+  const S = {
+    cfg: null, ticks: [], asset: null, assetName: '', version: -1, lastTs: 0, recvWall: 0,
+    view: 180, expiry: 60, serverPayout: null, signals: [], lastSignalId: null, prec: 5,
+    hover: null, catalog: [], catalogVersion: -1, catalogSource: '', cat: 'all', polling: false,
+  };
+  const $ = id => document.getElementById(id);
+  const MAX_KEEP = 2400;
+  const TYPE_RU = { currency: 'Валюты', cryptocurrency: 'Крипта', commodity: 'Сырьё', stock: 'Акции', index: 'Индексы' };
+
+  // ======================================================== утилиты
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pad = n => String(n).padStart(2, '0');
+  const fmtT = (ts, sec = true) => { const d = new Date(ts * 1000);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + (sec ? ':' + pad(d.getSeconds()) : ''); };
+  const fmtP = p => p == null ? '—' : Number(p).toFixed(S.prec);
+  const pct = x => (x * 100).toFixed(1) + '%';
+  const breakeven = p => 1 / (1 + p);
+  const nowServer = () => S.lastTs ? S.lastTs + (Date.now() / 1000 - S.recvWall) : Date.now() / 1000;
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  let toastTimer;
+  function toast(msg, err = false) {
+    const t = $('toast'); t.textContent = msg; t.className = 'on' + (err ? ' err' : '');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = '', 3200);
+  }
+  function payoutEff() {
+    const ov = store.get('pos_payout_ov', {})[S.asset];
+    if (ov > 0) return ov / 100;
+    return S.serverPayout;
+  }
+  function payClass(p) { return p == null ? 'na' : p >= 80 ? '' : p >= 60 ? 'mid' : 'low'; }
+
+  async function api(path, body) {
+    const opt = body === undefined ? { cache: 'no-store' }
+      : { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } };
+    const r = await fetch(path, opt);
+    if (r.status === 401) { showLogin(); throw new Error('auth'); }
+    return r.json();
+  }
+
+  // ======================================================== вход
+  function showLogin() {
+    S.polling = false; $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+    setTimeout(() => $('loginPw').focus(), 50);
+  }
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault(); $('loginErr').textContent = '';
+    const r = await fetch('/api/login', { method: 'POST', body: JSON.stringify({ password: $('loginPw').value }) });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { $('loginPw').value = ''; boot(); } else $('loginErr').textContent = j.error || 'Ошибка входа';
+  });
+
+  async function boot() {
+    try { S.cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); }
+    catch { toast('Сервер недоступен', true); setTimeout(boot, 3000); return; }
+    if (S.cfg.auth && !S.cfg.authed) { showLogin(); return; }
+    $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+    applyConfig();
+    if (!S.polling) { S.polling = true; poll(); }
+  }
+  function applyConfig() {
+    const c = S.cfg;
+    $('demoBanner').classList.toggle('hidden', !c.demo);
+    $('ssidBox').classList.toggle('hidden', !c.can_set_ssid);
+    const note = $('ssidNote');
+    if (!c.demo && !c.can_set_ssid) {
+      note.classList.remove('hidden');
+      note.textContent = 'SSID задаётся переменной SSID на хостинге. Чтобы менять его прямо с телефона, задай там же APP_PASSWORD.';
+    } else note.classList.add('hidden');
+    $('logoutSec').classList.toggle('hidden', !c.auth);
+    $('aboutSec').textContent = `PO Signal ${c.version} · учебный инструмент. Только читает котировки, сделки не открывает.`;
+  }
+
+  // ======================================================== данные
+  async function poll() {
+    if (!S.polling) return;
+    if (document.hidden) { setTimeout(poll, 1000); return; }
+    try {
+      const st = await api('/api/state?since=' + S.lastTs);
+      if (st.asset !== S.asset || st.version !== S.version) {
+        const reload = S.lastTs !== 0;
+        if (st.asset !== S.asset) { S.lastSignalId = null; resetResult(); }
+        S.asset = st.asset; S.version = st.version; S.ticks = []; S.lastTs = 0;
+        if (reload) { setTimeout(poll, 0); return; }
+      }
+      if (st.ticks.length) {
+        for (const t of st.ticks) if (t[0] > S.lastTs) { S.ticks.push(t); S.lastTs = t[0]; }
+        S.recvWall = Date.now() / 1000;
+        const cut = S.lastTs - MAX_KEEP;
+        if (S.ticks[0] && S.ticks[0][0] < cut) S.ticks = S.ticks.filter(t => t[0] >= cut);
+        detectPrecision();
+      }
+      S.serverPayout = st.payout; S.assetName = st.asset_name;
+      updateHeader(st);
+      resolveSignals();
+      updateSignals();
+      if (st.catalog_version !== S.catalogVersion) loadCatalog(st.catalog_version);
+    } catch (e) {
+      if (e.message === 'auth') return;
+      setStatus('error', 'Нет связи с сервером…');
+    }
+    setTimeout(poll, 1500);
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheets(); });
+
+  function detectPrecision() {
+    let best = 2;
+    for (const [, p] of S.ticks.slice(-60)) {
+      let d = 2;
+      while (d < 6 && Math.abs(p * 10 ** d - Math.round(p * 10 ** d)) > 1e-6) d++;
+      best = Math.max(best, d);
+    }
+    S.prec = best;
+  }
+  function setStatus(cls, text) { $('statusbar').className = 'statusbar ' + cls; $('statusText').textContent = text; }
+
+  function updateHeader(st) {
+    $('aName').textContent = st.asset_name || st.asset;
+    $('aIco').textContent = (st.asset_name || st.asset || '?').replace(/^#/, '').slice(0, 1).toUpperCase();
+    const p = payoutEff();
+    const pay = $('aPay'); pay.textContent = p ? Math.round(p * 100) + '%' : '—'; pay.className = 'pay ' + payClass(p ? p * 100 : null);
+    setStatus(st.status, `${st.status_text} · ${st.source}`);
+    $('setSource').innerHTML = `${esc(st.source)}<br><span class="muted">${esc(st.status_text)}</span>`;
+    const n = S.ticks.length;
+    if (n) {
+      const last = S.ticks[n - 1][1];
+      $('lastPrice').textContent = fmtP(last);
+      const ref = S.ticks.find(t => t[0] >= S.lastTs - 60);
+      if (ref) {
+        const d = last - ref[1];
+        $('lastChg').textContent = (d >= 0 ? '+' : '') + d.toFixed(S.prec) + ' /1м';
+        $('lastChg').style.color = d > 0 ? 'var(--green)' : d < 0 ? 'var(--red)' : 'var(--muted)';
+      }
+    } else { $('lastPrice').textContent = '—'; $('lastChg').innerHTML = '&nbsp;'; }
+    updateBreakeven();
+  }
+  function updateBreakeven() {
+    const p = payoutEff();
+    $('beSet').textContent = p ? pct(breakeven(p)) : '—';
+    const ov = store.get('pos_payout_ov', {})[S.asset];
+    if (document.activeElement !== $('payIn')) $('payIn').value = ov > 0 ? ov : '';
+    $('payIn').placeholder = S.serverPayout ? 'авто ' + Math.round(S.serverPayout * 100) : 'авто';
+  }
+
+  // ======================================================== график
+  const cv = $('chart'), ctx = cv.getContext('2d');
+  const MONO = getComputedStyle(document.documentElement).getPropertyValue('--mono');
+  function niceStep(range, target) {
+    const rough = range / target, mag = 10 ** Math.floor(Math.log10(rough));
+    for (const m of [1, 2, 2.5, 5, 10]) if (m * mag >= rough) return m * mag;
+    return 10 * mag;
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  let lastDraw = 0;
+  function frame(ts) {
+    if (ts - lastDraw > 50 && !$('app').classList.contains('hidden')) { lastDraw = ts; draw(); }
+    requestAnimationFrame(frame);
+  }
+  function draw() {
+    const W = cv.clientWidth, H = cv.clientHeight, dpr = window.devicePixelRatio || 1;
+    if (!W || !H) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const small = W < 520;
+    const R = small ? 68 : 84, B = 24, T = 46;
+    const PW = W - R, PH = H - B - T;
+    const now = nowServer();
+    const nowFrac = small ? 0.82 : 0.8;
+    const t0 = now - S.view, t1 = now + S.view * (1 - nowFrac) / nowFrac;
+    const X = t => (t - t0) / (t1 - t0) * PW;
+
+    const vis = [];
+    for (let i = 0; i < S.ticks.length; i++) {
+      const t = S.ticks[i];
+      if (t[0] >= t0) { if (!vis.length && i > 0) vis.push(S.ticks[i - 1]); vis.push(t); }
+    }
+    if (vis.length < 2) {
+      ctx.fillStyle = '#8392ad'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Ждём котировки…', W / 2, H / 2); return;
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (const [, p] of vis) { if (p < lo) lo = p; if (p > hi) hi = p; }
+    const visSig = S.signals.filter(s => s.result !== 'SKIP' && s.expire_ts >= t0 && s.entry_ts <= t1);
+    for (const s of visSig) { lo = Math.min(lo, s.entry_price); hi = Math.max(hi, s.entry_price); }
+    if (hi - lo < 1e-9) { hi += 10 ** -S.prec * 5; lo -= 10 ** -S.prec * 5; }
+    const padY = (hi - lo) * 0.12; lo -= padY; hi += padY;
+    const Y = p => T + (1 - (p - lo) / (hi - lo)) * PH;
+
+    // сетка цен
+    const step = niceStep(hi - lo, small ? 4 : 6);
+    const e10 = Math.floor(Math.log10(step) + 1e-9), mant = step / 10 ** e10;
+    const gd = Math.max(0, Math.min(6, -e10 + (Math.abs(mant - 2.5) < 1e-6 ? 1 : 0)));
+    ctx.font = (small ? '10px ' : '11px ') + MONO; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineWidth = 1;
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      const y = Math.round(Y(v)) + .5;
+      ctx.strokeStyle = 'rgba(120,140,180,.10)'; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(PW, y); ctx.stroke();
+      ctx.fillStyle = '#7d8ba5'; ctx.fillText(v.toFixed(Math.max(gd, S.prec)), PW + 6, y);
+    }
+    // сетка времени
+    const tStep = [5, 10, 15, 30, 60, 120, 300, 600].find(s => (t1 - t0) / s <= (small ? 5 : 8)) || 600;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let t = Math.ceil(t0 / tStep) * tStep; t <= t1; t += tStep) {
+      const x = Math.round(X(t)) + .5;
+      ctx.strokeStyle = 'rgba(120,140,180,.08)'; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + PH); ctx.stroke();
+      ctx.fillStyle = '#7d8ba5'; ctx.fillText(fmtT(t, tStep < 60), x, T + PH + 6);
+    }
+    const xn = Math.round(X(now)) + .5;
+    ctx.strokeStyle = 'rgba(160,180,220,.25)'; ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(xn, T); ctx.lineTo(xn, T + PH); ctx.stroke(); ctx.setLineDash([]);
+
+    // зоны сигналов
+    for (const s of visSig) {
+      const xa = X(s.entry_ts), xb = X(s.expire_ts), y = Y(s.entry_price);
+      const col = s.signal === 'LONG' ? '46,194,126' : '239,91,91';
+      ctx.fillStyle = `rgba(${col},.07)`; ctx.fillRect(xa, T, xb - xa, PH);
+      ctx.strokeStyle = `rgba(${col},.75)`; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(xa, y); ctx.lineTo(xb, y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(xb, T); ctx.lineTo(xb, T + PH); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // линия и заливка
+    ctx.beginPath();
+    vis.forEach(([t, p], i) => { const x = X(t), y = Y(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    const lastX = X(vis[vis.length - 1][0]), lastY = Y(vis[vis.length - 1][1]);
+    ctx.lineTo(xn, lastY);
+    ctx.strokeStyle = '#5b8cf5'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.lineTo(xn, T + PH); ctx.lineTo(X(vis[0][0]), T + PH); ctx.closePath();
+    const ar = ctx.createLinearGradient(0, T, 0, T + PH);
+    ar.addColorStop(0, 'rgba(91,140,245,.30)'); ar.addColorStop(1, 'rgba(91,140,245,0)');
+    ctx.fillStyle = ar; ctx.fill(); ctx.lineWidth = 1;
+
+    // маркеры входа
+    visSig.forEach((s, k) => {
+      const x = X(s.entry_ts), y = Y(s.entry_price), up = s.signal === 'LONG';
+      ctx.fillStyle = up ? '#2ec27e' : '#ef5b5b'; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath();
+      if (up) { ctx.moveTo(x, y - 5); ctx.lineTo(x + 4.5, y + 3); ctx.lineTo(x - 4.5, y + 3); }
+      else { ctx.moveTo(x, y + 5); ctx.lineTo(x + 4.5, y - 3); ctx.lineTo(x - 4.5, y - 3); }
+      ctx.fill();
+      let lab, c = '#c9d3e6';
+      if (s.result === 'PENDING') lab = Math.max(0, Math.ceil(s.expire_ts - now)) + 'с';
+      else if (s.result === 'WIN') { lab = '✓'; c = '#2ec27e'; }
+      else if (s.result === 'LOSS') { lab = '✗'; c = '#ef5b5b'; }
+      else lab = '=';
+      ctx.font = '700 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = c;
+      ctx.fillText(lab, X(s.expire_ts), T + 2 + (visSig.length - 1 - k) % 4 * 14);
+    });
+    // текущая цена
+    const ly = Math.round(lastY) + .5;
+    ctx.strokeStyle = 'rgba(91,140,245,.55)'; ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(PW, ly); ctx.stroke();
+    const pulse = (Date.now() % 1400) / 1400;
+    ctx.fillStyle = `rgba(91,180,255,${.35 * (1 - pulse)})`; ctx.beginPath(); ctx.arc(lastX, lastY, 4 + pulse * 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4fb4ff'; ctx.beginPath(); ctx.arc(lastX, lastY, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.font = (small ? '600 11px ' : '600 12px ') + MONO;
+    ctx.fillStyle = '#3e6fe0'; roundRect(PW + 1, ly - 10, R - 3, 20, 4); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(fmtP(vis[vis.length - 1][1]), PW + 5, ly);
+
+    // перекрестье (мышь / палец)
+    if (S.hover && S.hover.x < PW) {
+      const th = t0 + S.hover.x / PW * (t1 - t0);
+      let best = null;
+      for (const t of vis) if (!best || Math.abs(t[0] - th) < Math.abs(best[0] - th)) best = t;
+      if (best && best[0] <= now + 1) {
+        const x = X(best[0]), y = Y(best[1]);
+        ctx.strokeStyle = 'rgba(200,210,235,.4)'; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + PH); ctx.moveTo(0, y); ctx.lineTo(PW, y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+        const txt = fmtT(best[0]) + '  ' + fmtP(best[1]);
+        ctx.font = '12px ' + MONO;
+        const tw = ctx.measureText(txt).width + 16, bx = Math.min(Math.max(x - tw / 2, 4), PW - tw - 4);
+        ctx.fillStyle = '#273248'; roundRect(bx, T + PH - 28, tw, 22, 6); ctx.fill();
+        ctx.fillStyle = '#e3e9f5'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 8, T + PH - 17);
+      }
+    }
+  }
+  // мышь и касания (вертикальный свайп по-прежнему листает страницу)
+  let hoverTimer;
+  cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); S.hover = { x: e.clientX - r.left }; clearTimeout(hoverTimer); });
+  cv.addEventListener('pointerdown', e => { const r = cv.getBoundingClientRect(); S.hover = { x: e.clientX - r.left }; clearTimeout(hoverTimer); });
+  const endHover = e => { clearTimeout(hoverTimer); hoverTimer = setTimeout(() => S.hover = null, e.pointerType === 'mouse' ? 0 : 1500); };
+  cv.addEventListener('pointerleave', endHover); cv.addEventListener('pointerup', endHover); cv.addEventListener('pointercancel', endHover);
+
+  // ======================================================== кнопки
+  $('tf').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of $('tf').children) x.classList.toggle('on', x === b); S.view = +b.dataset.s;
+  });
+  $('exp').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of $('exp').children) x.classList.toggle('on', x === b); S.expiry = +b.dataset.e;
+  });
+  $('clearBtn').addEventListener('click', () => {
+    saveSignals(allSignals().filter(s => s.asset !== S.asset)); S.lastSignalId = null; updateSignals(); toast('Список сигналов очищен');
+  });
+  $('payIn').addEventListener('input', () => {
+    const ov = store.get('pos_payout_ov', {}); const v = parseFloat($('payIn').value);
+    if (v > 0) ov[S.asset] = v; else delete ov[S.asset];
+    store.set('pos_payout_ov', ov); updateBreakeven();
+  });
+  $('ssidBtn').addEventListener('click', async () => {
+    const v = $('ssidInput').value.trim(); if (!v) return;
+    const j = await api('/api/ssid', { ssid: v });
+    if (j.ok) {
+      $('ssidInput').value = '';
+      toast(j.saved ? 'SSID сохранён, переподключаюсь…' : 'SSID принят (до перезапуска сервера), переподключаюсь…');
+    } else toast(j.error || 'Ошибка', true);
+  });
+  $('logoutBtn').addEventListener('click', async () => { await fetch('/api/logout', { method: 'POST' }); closeSheets(); showLogin(); });
+
+  // ======================================================== анализ
+  $('analyzeBtn').addEventListener('click', async () => {
+    const btn = $('analyzeBtn'); btn.disabled = true; btn.textContent = 'СЧИТАЮ…';
+    try {
+      const res = PoAnalysis.analyze(S.ticks);
+      if (res.ok) res.record = addSignal(res);
+      showResult(res); updateSignals();
+    } catch (e) { toast('Не удалось выполнить анализ', true); }
+    finally { btn.disabled = false; btn.textContent = 'АНАЛИЗ'; }
+  });
+  function resetResult() { $('resultPh').classList.remove('hidden'); $('resultBody').classList.add('hidden'); }
+  function showResult(res) {
+    $('resultPh').classList.add('hidden'); $('resultBody').classList.remove('hidden');
+    const v = $('verdict');
+    if (!res.ok) {
+      v.className = 'verdict NEUTRAL'; $('vArrow').textContent = '…'; $('vText').textContent = 'Рано';
+      $('vSub').textContent = res.error; $('tiles').innerHTML = ''; $('whyList').innerHTML = '';
+      $('strengthBar').style.width = '0'; $('countdown').textContent = ''; S.lastSignalId = null; return;
+    }
+    const map = { LONG: ['▲', 'ЛОНГ', 'вверх · CALL'], SHORT: ['▼', 'ШОРТ', 'вниз · PUT'], NEUTRAL: ['—', 'НЕТ СИГНАЛА', 'индикаторы спорят — пропусти'] };
+    const [arw, tx, sub] = map[res.signal];
+    v.className = 'verdict ' + res.signal; $('vArrow').textContent = arw; $('vText').textContent = tx;
+    $('vSub').textContent = `${sub} · ${fmtP(res.price)} · ${fmtT(res.ts)}`;
+    const sb = $('strengthBar'); sb.style.width = (Math.min(1, Math.abs(res.score)) * 100).toFixed(0) + '%';
+    sb.style.background = res.signal === 'LONG' ? 'var(--green)' : res.signal === 'SHORT' ? 'var(--red)' : 'var(--muted)';
+    const short = { trend: 'Тренд', momentum: 'Импульс', rsi: 'RSI', bollinger: 'Боллинджер' };
+    $('tiles').innerHTML = res.indicators.map(i => {
+      const w = Math.abs(i.vote) * 50, left = i.vote >= 0 ? 50 : 50 - w;
+      const col = i.vote > 0 ? 'var(--green)' : i.vote < 0 ? 'var(--red)' : 'var(--muted)';
+      const dir = i.vote > 0.05 ? '▲' : i.vote < -0.05 ? '▼' : '·';
+      return `<div class="tile"><div class="t"><span>${esc(short[i.key] || i.name)}</span><span style="color:${col}">${dir}</span></div>
+        <div class="v">${esc(i.value)}</div><div class="vote"><div style="left:${left}%;width:${Math.max(w, 1)}%;background:${col}"></div></div></div>`;
+    }).join('');
+    $('whyList').innerHTML = res.indicators.map(i => `<li><b>${esc(i.name)}:</b> ${esc(i.text)}</li>`).join('');
+    S.lastSignalId = res.record && res.signal !== 'NEUTRAL' ? res.record.id : null;
+    $('countdown').textContent = '';
+    if (navigator.vibrate) try { navigator.vibrate(20); } catch {}
+    if (window.innerWidth < 900) $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ======================================================== мои сигналы (хранятся на телефоне)
+  let sigSeq = Date.now();
+  function allSignals() { return store.get('pos_signals', []); }
+  function saveSignals(list) { store.set('pos_signals', list.slice(-300)); }
+  function addSignal(res) {
+    if (res.signal === 'NEUTRAL') return null;
+    const sig = { id: ++sigSeq, asset: S.asset, signal: res.signal, score: res.score, entry_ts: res.ts,
+      entry_price: res.price, expiry: S.expiry, expire_ts: res.ts + S.expiry, exit_price: null, result: 'PENDING' };
+    const list = allSignals(); list.push(sig); saveSignals(list); return sig;
+  }
+  function resolveSignals() {
+    if (!S.ticks.length) return;
+    const list = allSignals(); let changed = false;
+    const first = S.ticks[0][0], last = S.lastTs;
+    for (const s of list) {
+      if (s.result !== 'PENDING' || s.asset !== S.asset || s.expire_ts > last) continue;
+      if (s.expire_ts < first) { s.result = 'NODATA'; changed = true; continue; }
+      const px = PoAnalysis.priceAt(S.ticks, s.expire_ts);
+      if (px == null) continue;
+      s.exit_price = px; changed = true;
+      s.result = px === s.entry_price ? 'TIE' : (px > s.entry_price) === (s.signal === 'LONG') ? 'WIN' : 'LOSS';
+    }
+    if (changed) saveSignals(list);
+  }
+  function updateSignals() {
+    const mine = allSignals().filter(s => s.asset === S.asset);
+    S.signals = mine;
+    const sg = { wins: mine.filter(s => s.result === 'WIN').length, losses: mine.filter(s => s.result === 'LOSS').length,
+      pending: mine.filter(s => s.result === 'PENDING').length, list: mine };
+    const done = sg.wins + sg.losses, rate = done ? sg.wins / done : null;
+    const p = payoutEff(), be = p ? breakeven(p) : null;
+    $('sWin').textContent = `${sg.wins} из ${done}` + (sg.pending ? ` · ждут ${sg.pending}` : '');
+    $('sRate').textContent = rate == null ? '—' : pct(rate);
+    $('sRate').className = rate == null || be == null ? '' : rate > be ? 'good' : 'bad';
+    $('sNeed').textContent = be ? `При выплате ${Math.round(p * 100)}% нужно угадывать больше ${pct(be)}.` +
+      (done && done < 30 ? ` По ${done} сделкам выводы делать рано.` : '') : 'Выплата неизвестна — задай её в ⚙︎ Настройках.';
+    const rows = sg.list.filter(s => s.result !== 'SKIP').slice(-15).reverse();
+    $('sigList').innerHTML = rows.map(s => {
+      const r = { WIN: ['✓', 'good'], LOSS: ['✗', 'bad'], TIE: ['=', ''], PENDING: ['…', ''], NODATA: ['?', 'muted'] }[s.result] || ['?', ''];
+      return `<div class="sig"><span class="muted">${fmtT(s.entry_ts)}</span>
+        <span class="${s.signal === 'LONG' ? 'good' : 'bad'}">${s.signal === 'LONG' ? '▲' : '▼'}</span>
+        <span>${fmtP(s.entry_price)} → ${s.exit_price == null ? '…' : fmtP(s.exit_price)}</span>
+        <span class="r ${r[1]}">${r[0]}</span></div>`;
+    }).join('');
+    tickCountdown();
+  }
+  function tickCountdown() {
+    if (S.lastSignalId == null) return;
+    const s = S.signals.find(x => x.id === S.lastSignalId); if (!s) return;
+    const el = $('countdown');
+    if (s.result === 'PENDING') el.innerHTML = `<span class="muted">проверка</span><br><span style="color:var(--amber)">${Math.max(0, Math.ceil(s.expire_ts - nowServer()))} с</span>`;
+    else if (s.result === 'WIN') el.innerHTML = '<span class="good">✓ угадал</span>';
+    else if (s.result === 'LOSS') el.innerHTML = '<span class="bad">✗ мимо</span>';
+    else el.textContent = '= ничья';
+  }
+  setInterval(tickCountdown, 1000);
+
+  // ======================================================== бэктест
+  $('btBtn').addEventListener('click', async () => {
+    $('btOut').innerHTML = '<div class="note">Считаю…</div>';
+    let b;
+    try {
+      const h = await api('/api/history');
+      const seen = new Map();
+      for (const chunk of h.chunks) for (const t of chunk) seen.set(Math.round(t[0] * 1000), t[1]);
+      for (const t of S.ticks) seen.set(Math.round(t[0] * 1000), t[1]);
+      const all = [...seen.entries()].sort((a, c) => a[0] - c[0]).map(([k, p]) => [k / 1000, p]);
+      const pay = payoutEff();
+      if (!pay) { $('btOut').innerHTML = '<div class="verdict-text">Выплата неизвестна — задай её в ⚙︎ Настройках.</div>'; return; }
+      await new Promise(r => setTimeout(r, 20));
+      b = PoAnalysis.backtest(all, S.expiry, pay);
+    } catch (e) { if (e.message !== 'auth') $('btOut').innerHTML = '<div class="verdict-text">Не удалось получить историю</div>'; return; }
+    if (!b.ok || !b.trades) { $('btOut').innerHTML = `<div class="verdict-text">${esc(b.error || b.verdict)}</div>`; return; }
+    const good = b.winrate > b.breakeven;
+    $('btOut').innerHTML = `
+      <div class="note">История ${Math.round(b.history_sec / 60)} мин (до 6 ч хранится на сервере) · экспирация ${b.expiry} с · выплата ${Math.round(b.payout * 100)}% · сделки не пересекаются</div>
+      <div class="stat" style="margin-top:6px"><span>Сигналов ▲/▼</span><b>${b.trades} (${b.longs}/${b.shorts})</b></div>
+      <div class="stat"><span>Угадано</span><b class="${good ? 'good' : 'bad'}">${b.wins} · ${pct(b.winrate)}</b></div>
+      <div class="stat"><span>95% интервал</span><b>${pct(b.ci_low)}–${pct(b.ci_high)}</b></div>
+      <div class="stat"><span>Нужно для безубытка</span><b>${pct(b.breakeven)}</b></div>
+      <div class="stat"><span>Итог на $100 ставок</span><b class="${b.ev_per_100 >= 0 ? 'good' : 'bad'}">${b.ev_per_100 >= 0 ? '+' : ''}${b.ev_per_100.toFixed(2)} $</b></div>
+      <div class="verdict-text">${esc(b.verdict)}</div>`;
+  });
+
+  // ======================================================== шторки
+  function openSheet(id) {
+    closeSheets(true);
+    $(id).classList.add('on'); $('backdrop').classList.add('on');
+    history.pushState({ sheet: id }, '');
+  }
+  function closeSheets(silent) {
+    const open = document.querySelector('.sheet.on');
+    document.querySelectorAll('.sheet.on').forEach(s => s.classList.remove('on'));
+    $('backdrop').classList.remove('on');
+    if (open && !silent && history.state && history.state.sheet) history.back();
+  }
+  window.addEventListener('popstate', () => {   // «назад» на Android закрывает шторку
+    document.querySelectorAll('.sheet.on').forEach(s => s.classList.remove('on')); $('backdrop').classList.remove('on');
+  });
+  $('backdrop').addEventListener('click', () => closeSheets());
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeSheets()));
+  $('setBtn').addEventListener('click', () => { updateBreakeven(); openSheet('setSheet'); });
+  $('assetBtn').addEventListener('click', () => {
+    const favs = store.get('pos_favs', []);
+    if (S.cat === 'all' && favs.length && !store.get('pos_cat_set', false)) S.cat = 'fav';
+    $('aSearch').value = '';
+    renderCats(); renderAssets(); openSheet('assetSheet');
+  });
+
+  // ======================================================== выбор пары
+  async function loadCatalog(ver) {
+    try {
+      const j = await api('/api/assets');
+      S.catalog = j.assets || []; S.catalogSource = j.source; S.catalogVersion = ver;
+      if ($('assetSheet').classList.contains('on')) { renderCats(); renderAssets(); }
+    } catch {}
+  }
+  function renderCats() {
+    const types = [...new Set(S.catalog.map(a => a.type))].filter(t => TYPE_RU[t]);
+    const order = ['currency', 'cryptocurrency', 'commodity', 'stock', 'index'];
+    types.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const cats = [['fav', '★ Избранное'], ['all', 'Все'], ['otc', 'OTC'], ...types.map(t => [t, TYPE_RU[t]])];
+    $('cats').innerHTML = cats.map(([k, l]) => `<button class="chip${S.cat === k ? ' on' : ''}" data-c="${k}">${l}</button>`).join('');
+  }
+  $('cats').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.cat = b.dataset.c; store.set('pos_cat_set', true); renderCats(); renderAssets();
+  });
+  $('aSearch').addEventListener('input', renderAssets);
+  $('showClosed').addEventListener('change', renderAssets);
+  function renderAssets() {
+    const q = $('aSearch').value.trim().toLowerCase();
+    const favs = new Set(store.get('pos_favs', []));
+    const showClosed = $('showClosed').checked;
+    let list = S.catalog.filter(a => {
+      if (!showClosed && !a.active && a.symbol !== S.asset) return false;
+      if (S.cat === 'fav' && !favs.has(a.symbol)) return false;
+      if (S.cat === 'otc' && !a.otc) return false;
+      if (TYPE_RU[S.cat] && a.type !== S.cat) return false;
+      if (q && !(a.name.toLowerCase().includes(q) || a.symbol.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    list.sort((a, b) => (b.active - a.active) || ((b.payout || 0) - (a.payout || 0)) || a.name.localeCompare(b.name));
+    const closedCount = S.catalog.filter(a => !a.active).length;
+    $('alist').innerHTML = list.map(a => `
+      <div class="row${a.symbol === S.asset ? ' cur' : ''}${a.active ? '' : ' closed'}" data-s="${esc(a.symbol)}">
+        <button class="star${favs.has(a.symbol) ? ' on' : ''}" data-star="${esc(a.symbol)}" aria-label="В избранное">${favs.has(a.symbol) ? '★' : '☆'}</button>
+        <div class="an"><div>${esc(a.name)}</div><div class="s">${esc(a.symbol)}${a.active ? '' : ' · закрыта'}</div></div>
+        <span class="pay ${payClass(a.payout)}">${a.payout != null ? esc(a.payout) + '%' : '—'}</span>
+      </div>`).join('') ||
+      `<div class="empty">${S.cat === 'fav' && !q ? 'Нажми ☆ у пары, чтобы добавить её в избранное' : 'Ничего не найдено'}</div>`;
+    const src = { live: 'Список и выплаты — из Pocket Option, обновляются сами.',
+      fallback: 'Pocket Option ещё не прислал список — показан примерный, выплаты могут быть устаревшими.',
+      demo: 'Режим симуляции: список примерный, выплаты условные.' }[S.catalogSource] || '';
+    $('catNote').textContent = src + (closedCount && !showClosed ? ` Скрыто закрытых: ${closedCount}.` : '');
+  }
+  $('alist').addEventListener('click', async e => {
+    const star = e.target.closest('[data-star]');
+    if (star) {
+      e.stopPropagation();
+      const favs = store.get('pos_favs', []), s = star.dataset.star, i = favs.indexOf(s);
+      if (i >= 0) favs.splice(i, 1); else favs.push(s);
+      store.set('pos_favs', favs); renderAssets(); return;
+    }
+    const row = e.target.closest('.row'); if (!row) return;
+    const sym = row.dataset.s;
+    closeSheets();
+    if (sym === S.asset) return;
+    const j = await api('/api/asset', { asset: sym });
+    if (!j.ok) { toast(j.error || 'Ошибка', true); return; }
+    $('btOut').innerHTML = ''; resetResult(); S.lastSignalId = null;
+    toast('Пара: ' + (S.catalog.find(a => a.symbol === sym)?.name || sym));
+  });
+
+  // ======================================================== старт
+  requestAnimationFrame(frame);
+  boot();
+})();
+</script>
+</body>
+</html>

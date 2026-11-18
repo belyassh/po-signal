@@ -1,0 +1,3 @@
+# Для локального запуска `npx wrangler dev`: скопируй в .dev.vars (в GitHub не попадает).
+APP_PASSWORD=придумай-пароль
+SSID=42["auth",{"session":"ВСТАВЬ_СЮДА","isDemo":1,"uid":12345,"platform":1}]
