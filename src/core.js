@@ -33,7 +33,7 @@ const NO_DATA_RECONNECT = 45_000;
 const HANDSHAKE_TIMEOUT = 15_000;
 const PING_EVERY = 20_000;
 
-export const SSID_HELP = 'SSID должен выглядеть так: 42["auth",{"session":"...","isDemo":1,"uid":12345,"platform":1}] — '
+export const SSID_HELP = 'SSID должен выглядеть так: 42["auth",{"sessionToken":"...","uid":"...",...}] — '
   + 'скопируй его целиком из DevTools на компьютере (F12 → Network → WS)';
 
 export const normAsset = a => String(a || '').trim().replace(/^#/, '').toLowerCase();
@@ -46,8 +46,15 @@ export function parseSsid(s) {
   if (i < 0 || j <= i) throw new Error(SSID_HELP);
   let d;
   try { d = JSON.parse(s.slice(i, j + 1)); } catch { throw new Error(SSID_HELP); }
-  if (!d || typeof d !== 'object' || !d.session) throw new Error('В SSID нет поля session. ' + SSID_HELP);
+  if (!d || typeof d !== 'object' || !(d.session || d.sessionToken)) throw new Error('В SSID нет поля session / sessionToken. ' + SSID_HELP);
   return d;
+}
+
+/** Демо или реальный счёт: старый формат — поле isDemo, новый — currentUrl вида "cabinet/demo-...". */
+export function ssidAccount(d) {
+  if (d.isDemo !== undefined) return d.isDemo === 0 || d.isDemo === false || d.isDemo === '0' ? 'real' : 'demo';
+  if (typeof d.currentUrl === 'string') return /demo/i.test(d.currentUrl) ? 'demo' : 'real';
+  return 'demo';
 }
 
 /** Тики из любых известных форматов → [[asset, ts, price], ...] */
@@ -206,7 +213,7 @@ export class PocketOptionFeed extends BaseFeed {
   setSsid(raw) {
     const d = parseSsid(raw);
     this.ssid = d;
-    this.account = d.isDemo === 0 || d.isDemo === false ? 'real' : 'demo';
+    this.account = ssidAccount(d);
     this.source = 'Pocket Option · ' + (this.account === 'demo' ? 'демо-счёт' : 'реальный счёт');
     return '42["auth",' + JSON.stringify(d) + ']';
   }
@@ -301,6 +308,8 @@ export class PocketOptionFeed extends BaseFeed {
   send(s) { try { this.ws && this.ws.send(s); } catch {} }
 
   authMessage() {
+    // новый формат (sessionToken) — отправляем ровно то, что шлёт браузер
+    if (this.ssid.sessionToken) return '42["auth",' + JSON.stringify(this.ssid) + ']';
     const d = { session: this.ssid.session, isDemo: this.account === 'demo' ? 1 : 0,
       uid: this.ssid.uid || 0, platform: this.ssid.platform || 1, isFastHistory: true };
     return '42["auth",' + JSON.stringify(d) + ']';
